@@ -39,6 +39,7 @@ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Category;
 import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.BooleanObjectInspector;
+import org.apache.hadoop.hive.serde2.objectinspector.primitive.ByteObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.DoubleObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.FloatObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.IntObjectInspector;
@@ -69,15 +70,15 @@ public class JsonSerDe implements SerDe {
     HashMap<String,String> columnMappings;
 
 
-   
+
     /**
      * Initializes the SerDe.
      * Gets the list of columns and their types from the table properties.
      * Will use them to look into/create JSON data.
-     * 
+     *
      * @param conf Hadoop configuration object
      * @param tbl  Table Properties
-     * @throws SerDeException 
+     * @throws SerDeException
      */
     @Override
     public void initialize(Configuration conf, Properties tbl) throws SerDeException {
@@ -85,7 +86,7 @@ public class JsonSerDe implements SerDe {
         // Get column names and sort order
         String columnNameProperty = tbl.getProperty(Constants.LIST_COLUMNS);
         String columnTypeProperty = tbl.getProperty(Constants.LIST_COLUMN_TYPES);
-        
+
         LOG.debug("columns " + columnNameProperty + " types " + columnTypeProperty);
 
         // all table column names
@@ -139,13 +140,15 @@ public class JsonSerDe implements SerDe {
     //     if(c == String.class) return Constants.STRING_TYPE_NAME;
     //     return null;
     // }
-    private String getClassName(String typeName){
-        if(typeName.equals(Constants.INT_TYPE_NAME)) return Integer.class.toString();
-        if(typeName.equals(Constants.BIGINT_TYPE_NAME)) return Long.class.toString();
-        if(typeName.equals(Constants.DOUBLE_TYPE_NAME)) return Double.class.toString();
-        if(typeName.equals(Constants.FLOAT_TYPE_NAME)) return Float.class.toString();
-        if(typeName.equals(Constants.BOOLEAN_TYPE_NAME)) return Boolean.class.toString();
-        
+    private Class getClassName(String typeName){
+        if(typeName.equals(Constants.TINYINT_TYPE_NAME)) return Byte.class;
+        if(typeName.equals(Constants.SMALLINT_TYPE_NAME)) return Short.class;
+        if(typeName.equals(Constants.INT_TYPE_NAME)) return Integer.class;
+        if(typeName.equals(Constants.BIGINT_TYPE_NAME)) return Long.class;
+        if(typeName.equals(Constants.DOUBLE_TYPE_NAME)) return Double.class;
+        if(typeName.equals(Constants.FLOAT_TYPE_NAME)) return Float.class;
+        if(typeName.equals(Constants.BOOLEAN_TYPE_NAME)) return Boolean.class;
+
         return null;
     }
 
@@ -154,15 +157,15 @@ public class JsonSerDe implements SerDe {
     /**
      * Deserializes the object. Reads a Writable and uses JSONObject to
      * parse its text
-     * 
+     *
      * @param w the text to parse
      * @return a JSONObject
-     * @throws SerDeException 
+     * @throws SerDeException
      */
     @Override
     public Object deserialize(Writable w) throws SerDeException {
         Text rowText = (Text) w;
-        
+
         // Try parsing row into JSON object
         JSONObject jObj = null;
         try {
@@ -177,7 +180,7 @@ public class JsonSerDe implements SerDe {
                 /**
                  * In Hive column names are case insensitive, so lower-case all
                  * field names
-                 * 
+                 *
                  * @see org.json.JSONObject#put(java.lang.String,
                  *      java.lang.Object)
                  */
@@ -188,11 +191,31 @@ public class JsonSerDe implements SerDe {
 
                     int fieldIndex = columnNames.indexOf(newK);
                     if(fieldIndex > -1){
-                        String typeName = getClassName(columnTypes.get(fieldIndex).toString());
-                        String valueTypeName = value.getClass().toString();
+                        Class columnType = getClassName(columnTypes.get(fieldIndex).toString());
+                        Class valueType = value.getClass();
 
-                        if(typeName != null && !typeName.equalsIgnoreCase(valueTypeName)){
-                            // don't put the value, and return the json object without it.
+                        if(columnType != null && columnType != valueType) {
+                            // if class don't match let's see if we can cast value to the expected class
+                            if(valueType == Long.class) {
+                                Long myLong = (Long)value;
+                                if (columnType == Byte.class && myLong.longValue() == myLong.byteValue())
+                                    value = new Byte(myLong.byteValue());
+                                else if (columnType == Short.class && myLong.longValue() == myLong.shortValue())
+                                    value = new Short(myLong.shortValue());
+                                else if (columnType == Integer.class && myLong.longValue() == myLong.intValue())
+                                    value = new Integer(myLong.intValue());
+                            }
+                            else if (valueType == Double.class && columnType == Float.class) {
+                                Double myDouble = (Double)value;
+                                // note: due to floating point approximation we check the string representation
+                                if (Double.toString(myDouble.doubleValue()).equals(Float.toString(myDouble.floatValue())))
+                                    value = new Float(myDouble.floatValue());
+                            }
+                        }
+
+                        // check agian for class type with (potentially) new type
+                        if(columnType != null && columnType != value.getClass()) {
+                            // we couldn't convert it so don't put the value, and return the json object without it.
                             return this;
                         }
                     }
@@ -204,9 +227,9 @@ public class JsonSerDe implements SerDe {
             LOG.error("Row is not a valid JSON Object - JSONException: "
                     + e.getMessage());
             try{
-              jObj = new JSONObject("{}");  
+              jObj = new JSONObject("{}");
             } catch(JSONException e2){}
-            
+
         }
         return jObj;
     }
@@ -217,9 +240,9 @@ public class JsonSerDe implements SerDe {
     }
 
     /**
-     * We serialize to Text 
-     * @return 
-     * 
+     * We serialize to Text
+     * @return
+     *
      * @see org.apache.hadoop.io.Text
      */
     @Override
@@ -230,15 +253,15 @@ public class JsonSerDe implements SerDe {
     /**
      * Hive will call this to serialize an object. Returns a writable object
      * of the same class returned by <a href="#getSerializedClass">getSerializedClass</a>
-     * 
+     *
      * @param obj The object to serialize
      * @param objInspector The ObjectInspector that knows about the object's structure
-     * @return a serialized object in form of a Writable. Must be the 
+     * @return a serialized object in form of a Writable. Must be the
      *         same type returned by <a href="#getSerializedClass">getSerializedClass</a>
-     * @throws SerDeException 
+     * @throws SerDeException
      */
     @Override
-    public Writable serialize(Object obj, ObjectInspector objInspector) throws SerDeException {        
+    public Writable serialize(Object obj, ObjectInspector objInspector) throws SerDeException {
         // make sure it is a struct record
         if (objInspector.getCategory() != Category.STRUCT) {
             throw new SerDeException(getClass().toString()
@@ -246,21 +269,21 @@ public class JsonSerDe implements SerDe {
                     + objInspector.getTypeName());
         }
 
-        JSONObject serializer = 
+        JSONObject serializer =
             serializeStruct( obj, (StructObjectInspector) objInspector, columnNames);
-        
+
         Text t = new Text(serializer.toString());
-        
+
         return t;
     }
 
     /**
-     * Serializing means getting every field, and setting the appropriate 
+     * Serializing means getting every field, and setting the appropriate
      * JSONObject field. Actual serialization is done at the end when
      * the whole JSON object is built
      * @param serializer
      * @param obj
-     * @param structObjectInspector 
+     * @param structObjectInspector
      */
     private JSONObject serializeStruct( Object obj,
             StructObjectInspector soi, List<String> columnNames) {
@@ -270,9 +293,9 @@ public class JsonSerDe implements SerDe {
         }
 
         JSONObject result = new JSONObject();
-        
+
         List<? extends StructField> fields = soi.getAllStructFieldRefs();
-        
+
         for (int i =0; i< fields.size(); i++) {
             StructField sf = fields.get(i);
             Object data = soi.getStructFieldData(obj, sf);
@@ -281,11 +304,11 @@ public class JsonSerDe implements SerDe {
                 try {
                     // we want to serialize columns with their proper HIVE name,
                     // not the _col2 kind of name usually generated upstream
-                    result.put((columnNames==null?sf.getFieldName():columnNames.get(i)), 
+                    result.put((columnNames==null?sf.getFieldName():columnNames.get(i)),
                             serializeField(
                                 data,
                                 sf.getFieldObjectInspector()));
-                    
+
                 } catch (JSONException ex) {
                    LOG.warn("Problem serialzing", ex);
                    throw new RuntimeException(ex);
@@ -294,19 +317,19 @@ public class JsonSerDe implements SerDe {
         }
         return result;
     }
-   
+
     /**
      * Serializes a field. Since we have nested structures, it may be called
-     * recursively for instance when defining a list<struct<>> 
-     * 
+     * recursively for instance when defining a list<struct<>>
+     *
      * @param obj Object holding the fields' content
      * @param oi  The field's objec inspector
      * @return  the serialized object
-     */  
+     */
     Object serializeField(Object obj,
             ObjectInspector oi ){
         if(obj == null) return null;
-        
+
         Object result = null;
         switch(oi.getCategory()) {
             case PRIMITIVE:
@@ -321,7 +344,7 @@ public class JsonSerDe implements SerDe {
                                             Boolean.FALSE);
                         break;
                     case BYTE:
-                        result = (((ShortObjectInspector)poi).get(obj));
+                        result = (((ByteObjectInspector)poi).get(obj));
                         break;
                     case DOUBLE:
                         result = (((DoubleObjectInspector)poi).get(obj));
@@ -359,18 +382,18 @@ public class JsonSerDe implements SerDe {
     }
 
     /**
-     * Serializes a Hive List using a JSONArray 
-     * 
+     * Serializes a Hive List using a JSONArray
+     *
      * @param obj the object to serialize
      * @param loi the object's inspector
-     * @return 
+     * @return
      */
     private JSONArray serializeList(Object obj, ListObjectInspector loi) {
         // could be an array of whatever!
         // we do it in reverse order since the JSONArray is grown on demand,
         // as higher indexes are added.
         if(obj==null) return null;
-        
+
         JSONArray ar = new JSONArray();
         for(int i=loi.getListLength(obj)-1; i>=0; i--) {
             Object element = loi.getListElement(obj, i);
@@ -386,17 +409,17 @@ public class JsonSerDe implements SerDe {
 
     /**
      * Serializes a Hive map<> using a JSONObject.
-     * 
+     *
      * @param obj the object to serialize
      * @param moi the object's inspector
-     * @return 
+     * @return
      */
     private JSONObject serializeMap(Object obj, MapObjectInspector moi) {
         if (obj==null) return null;
-        
-        JSONObject jo = new JSONObject();  
+
+        JSONObject jo = new JSONObject();
         Map m = moi.getMap(obj);
-        
+
         for(Object k : m.keySet()) {
             try {
                 jo.put(

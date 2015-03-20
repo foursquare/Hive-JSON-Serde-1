@@ -41,7 +41,7 @@ import static org.junit.Assert.*;
  * @author rcongiu
  */
 public class JsonSerDeTest {
-    
+
     public JsonSerDeTest() {
     }
 
@@ -52,18 +52,18 @@ public class JsonSerDeTest {
     @AfterClass
     public static void tearDownClass() throws Exception {
     }
-    
+
     @Before
     public void setUp() throws Exception {
         initialize();
     }
-    
+
     @After
     public void tearDown() {
     }
 
     static JsonSerDe instance;
-    
+
     static String defaultColumns = "one,two,three,four";
     static String defaultColumnTypes = "int,boolean,array<string>,string";
 
@@ -74,7 +74,7 @@ public class JsonSerDeTest {
         Properties tbl = new Properties();
         tbl.setProperty(Constants.LIST_COLUMNS, "one,two,three,four");
         tbl.setProperty(Constants.LIST_COLUMN_TYPES, "boolean,float,array<string>,string");
-        
+
         instance.initialize(conf, tbl);
     }
     static public void alternateInitialize(String cols, String colTypes) throws Exception{
@@ -84,8 +84,8 @@ public class JsonSerDeTest {
         Properties tbl = new Properties();
         tbl.setProperty(Constants.LIST_COLUMNS, cols);
         tbl.setProperty(Constants.LIST_COLUMN_TYPES, colTypes);
-        
-        instance.initialize(conf, tbl);   
+
+        instance.initialize(conf, tbl);
     }
 
     @Test(expected=JSONException.class)
@@ -97,13 +97,22 @@ public class JsonSerDeTest {
         result.get("one");
     }
 
+    @Test(expected=JSONException.class)
+    public void testShouldDropValuesWhenCannotConvert() throws Exception{
+        alternateInitialize(defaultColumns, defaultColumnTypes);
+        Writable w = new Text("{\"one\":1424464386996, \"two\": true}");
+        JSONObject result = (JSONObject) instance.deserialize(w);
+        assertEquals(result.get("two"), true);
+        result.get("one");
+    }
+
     @Test
     public void testShouldntDropFieldWhenExpectsString() throws Exception{
         alternateInitialize(defaultColumns, "string,string,array<string>,string");
         Writable w = new Text("{\"one\":23, \"two\": true}");
         JSONObject result = (JSONObject) instance.deserialize(w);
         assertEquals(result.get("two"), true);
-        assertEquals(result.get("one"), 23);
+        assertEquals(result.get("one"), 23L);
     }
 
     @Test
@@ -135,9 +144,9 @@ public class JsonSerDeTest {
         Object expResult = null;
         JSONObject result = (JSONObject) instance.deserialize(w);
         assertEquals(result.get("four"),"poop");
-        
+
         assertTrue( result.get("three") instanceof JSONArray);
-        
+
         assertTrue( ((JSONArray)result.get("three")).get(0) instanceof String );
         assertEquals( ((JSONArray)result.get("three")).get(0),"red");
     }
@@ -150,9 +159,9 @@ public class JsonSerDeTest {
         Object expResult = null;
         JSONObject result = (JSONObject) instance.deserialize(w);
         assertEquals(result.get("four"),"poop");
-        
+
         assertTrue( result.get("three") instanceof JSONArray);
-        
+
         assertTrue( ((JSONArray)result.get("three")).get(0) instanceof String );
         assertEquals( ((JSONArray)result.get("three")).get(0),"red");
     }
@@ -166,7 +175,7 @@ public class JsonSerDeTest {
         Class expResult = Text.class;
         Class result = instance.getSerializedClass();
         assertEquals(expResult, result);
-       
+
     }
 
     @Test
@@ -190,66 +199,166 @@ public class JsonSerDeTest {
         Writable result = instance.serialize(o, oi);
         assertEquals(expResult, result);
     }
-     *  
+     *
      */
-    
-    
+
+
    // @Test
     public void testSerialize() throws SerDeException, JSONException {
         System.out.println("serialize");
         ArrayList row = new ArrayList(5);
-        
+
         List<ObjectInspector> lOi = new LinkedList<ObjectInspector>();
         List<String> fieldNames = new LinkedList<String>();
-        
+
         row.add("HELLO");
         fieldNames.add("atext");
-        lOi.add(ObjectInspectorFactory.getReflectionObjectInspector(String.class, 
+        lOi.add(ObjectInspectorFactory.getReflectionObjectInspector(String.class,
                    ObjectInspectorFactory.ObjectInspectorOptions.JAVA));
-        
+
         row.add(10);
         fieldNames.add("anumber");
-        lOi.add(ObjectInspectorFactory.getReflectionObjectInspector(Integer.class, 
+        lOi.add(ObjectInspectorFactory.getReflectionObjectInspector(Integer.class,
                    ObjectInspectorFactory.ObjectInspectorOptions.JAVA));
-        
+
         List<String> array = new LinkedList<String>();
         array.add("String1");
         array.add("String2");
-        
+
         row.add(array);
         fieldNames.add("alist");
         lOi.add(ObjectInspectorFactory.getStandardListObjectInspector(
-                ObjectInspectorFactory.getReflectionObjectInspector(String.class, 
+                ObjectInspectorFactory.getReflectionObjectInspector(String.class,
                    ObjectInspectorFactory.ObjectInspectorOptions.JAVA)));
-        
+
         Map<String,String> m = new HashMap<String,String>();
         m.put("k1","v1");
         m.put("k2","v2");
-        
+
         row.add(m);
         fieldNames.add("amap");
         lOi.add(ObjectInspectorFactory.getStandardMapObjectInspector(
-                ObjectInspectorFactory.getReflectionObjectInspector(String.class, 
+                ObjectInspectorFactory.getReflectionObjectInspector(String.class,
                    ObjectInspectorFactory.ObjectInspectorOptions.JAVA),
-                ObjectInspectorFactory.getReflectionObjectInspector(String.class, 
+                ObjectInspectorFactory.getReflectionObjectInspector(String.class,
                    ObjectInspectorFactory.ObjectInspectorOptions.JAVA)));
-        
-        
+
+
         StructObjectInspector soi = ObjectInspectorFactory.getStandardStructObjectInspector(fieldNames, lOi);
-        
+
         Object result = instance.serialize(row, soi);
-        
+
         JSONObject res = new JSONObject(result.toString());
         assertEquals(res.getString("atext"), row.get(0));
-        
+
         assertEquals(res.get("anumber") , row.get(1));
-        
+
         // after serialization the internal contents of JSONObject are destroyed (overwritten by their string representation
-       // (for map and arrays) 
-      
-       
+       // (for map and arrays)
+
+
         System.out.println("Serialized to " + result.toString());
-        
+
     }
-    
+
+    public JsonSerDe getNumericSerde() throws SerDeException {
+        JsonSerDe serde = new JsonSerDe();
+        Configuration conf = null;
+        Properties tbl = new Properties();
+        tbl.setProperty(Constants.LIST_COLUMNS, "cboolean,ctinyint,csmallint,cint,cbigint,cfloat,cdouble");
+        tbl.setProperty(Constants.LIST_COLUMN_TYPES, "boolean,tinyint,smallint,int,bigint,float,double");
+
+        serde.initialize(conf, tbl);
+        return serde;
+    }
+
+    @Test
+    public void testNumbers() throws SerDeException, JSONException {
+        System.out.println("testNumbers");
+
+        JsonSerDe serde = getNumericSerde();
+        Text line = new Text("{ cboolean:true, ctinyint:1, csmallint:200, cint:12345,cbigint:123446767687867, cfloat:3.1415, cdouble:43424234234.4243423}");
+        StructObjectInspector soi = (StructObjectInspector) serde.getObjectInspector();
+        JSONObject result = (JSONObject) serde.deserialize(line);
+
+        assertTrue(result.get("cboolean") instanceof Boolean);
+        assertEquals(result.get("cboolean"), true);
+        assertTrue(result.get("ctinyint") instanceof Byte);
+        assertEquals(result.get("ctinyint"), (byte)1);
+        assertTrue(result.get("csmallint") instanceof Short);
+        assertEquals(result.get("csmallint"), (short)200);
+        assertTrue(result.get("cint") instanceof Integer);
+        assertEquals(result.get("cint"), 12345);
+        assertTrue(result.get("cbigint") instanceof Long);
+        assertEquals(result.get("cbigint"), 123446767687867L);
+        assertTrue(result.get("cfloat") instanceof Float);
+        assertEquals(result.get("cfloat"), 3.1415F);
+        assertTrue(result.get("cdouble") instanceof Double);
+        assertEquals(result.get("cdouble"), 43424234234.4243423);
+    }
+
+    @Test
+    public void testNegativeNumbers() throws SerDeException, JSONException {
+        System.out.println("testNegativeNumbers");
+
+        JsonSerDe serde = getNumericSerde();
+        Text line = new Text("{ cboolean:false, ctinyint:-1, csmallint:-200, cint:-12345,cbigint:-123446767687867, cfloat:-3.1415, cdouble:-43424234234.4243423}");
+        StructObjectInspector soi = (StructObjectInspector) serde.getObjectInspector();
+        JSONObject result = (JSONObject) serde.deserialize(line);
+
+        assertTrue(result.get("cboolean") instanceof Boolean);
+        assertEquals(result.get("cboolean"), false);
+        assertTrue(result.get("ctinyint") instanceof Byte);
+        assertEquals(result.get("ctinyint"), (byte)-1);
+        assertTrue(result.get("csmallint") instanceof Short);
+        assertEquals(result.get("csmallint"), (short)-200);
+        assertTrue(result.get("cint") instanceof Integer);
+        assertEquals(result.get("cint"), -12345);
+        assertTrue(result.get("cbigint") instanceof Long);
+        assertEquals(result.get("cbigint"), -123446767687867L);
+        assertTrue(result.get("cfloat") instanceof Float);
+        assertEquals(result.get("cfloat"), -3.1415F);
+        assertTrue(result.get("cdouble") instanceof Double);
+        assertEquals(result.get("cdouble"), -43424234234.4243423);
+    }
+
+    @Test
+    public void testSmallNumbersWithTypes() throws SerDeException, JSONException {
+        System.out.println("testSmallNumbersWithTypes");
+
+        JsonSerDe serde = getNumericSerde();
+        Text line = new Text("{ cboolean:true, ctinyint:1, csmallint:1, cint:1,cbigint:1, cfloat:3.1, cdouble:3.1}");
+        StructObjectInspector soi = (StructObjectInspector) serde.getObjectInspector();
+        JSONObject result = (JSONObject) serde.deserialize(line);
+
+        assertTrue(result.get("cboolean") instanceof Boolean);
+        assertEquals(result.get("cboolean"), true);
+        assertTrue(result.get("ctinyint") instanceof Byte);
+        assertEquals(result.get("ctinyint"), (byte)1);
+        assertTrue(result.get("csmallint") instanceof Short);
+        assertEquals(result.get("csmallint"), (short)1);
+        assertTrue(result.get("cint") instanceof Integer);
+        assertEquals(result.get("cint"), 1);
+        assertTrue(result.get("cbigint") instanceof Long);
+        assertEquals(result.get("cbigint"), 1L);
+        assertTrue(result.get("cfloat") instanceof Float);
+        assertEquals(result.get("cfloat"), 3.1F);
+        assertTrue(result.get("cdouble") instanceof Double);
+        assertEquals(result.get("cdouble"), 3.1);
+    }
+
+    public void testENotationNumbers() throws SerDeException, JSONException {
+        System.out.println("testENotationNumbers");
+
+        JsonSerDe serde = getNumericSerde();
+        Text line = new Text("{ cfloat:3.1415E02, cdouble:-1.65788E-12}");
+        StructObjectInspector soi = (StructObjectInspector) serde.getObjectInspector();
+        JSONObject result = (JSONObject) serde.deserialize(line);
+
+        assertTrue(result.get("cfloat") instanceof Float);
+        assertEquals(result.get("cfloat"), 3.1415E02);
+        assertTrue(result.get("cdouble") instanceof Double);
+        assertEquals(result.get("cdouble"), -1.65788E-12);
+    }
+
  }
