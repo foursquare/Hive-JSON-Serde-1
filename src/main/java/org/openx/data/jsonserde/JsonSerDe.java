@@ -13,8 +13,10 @@
 
 package org.openx.data.jsonserde;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -211,6 +213,12 @@ public class JsonSerDe implements SerDe {
                                 if (Double.toString(myDouble.doubleValue()).equals(Float.toString(myDouble.floatValue())))
                                     value = new Float(myDouble.floatValue());
                             }
+                        }
+
+                        // this is a terrible serde hack to conver flumed_api_hit ts into thrift DateTime ts
+                        if (newK.equals("timestamp") && valueType == Long.class) {
+                            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                            value = df.format(new Date((Long)value*1000));
                         }
 
                         // check agian for class type with (potentially) new type

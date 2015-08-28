@@ -5,7 +5,7 @@
 
     <groupId>org.openx.data</groupId>
     <artifactId>json-serde</artifactId>
-    <version>1.4-FSA</version>
+    <version>1.5-FSA</version>
     <packaging>jar</packaging>
 
     <name>openx-json-serde</name>

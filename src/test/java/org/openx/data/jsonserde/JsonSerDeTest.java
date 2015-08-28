@@ -116,6 +116,14 @@ public class JsonSerDeTest {
     }
 
     @Test
+    public void testShouldConvertIntTsToStrDateTime() throws Exception{
+        alternateInitialize("one,two,timestamp", "string,string,string");
+        Writable w = new Text("{\"timestamp\":1418428809}");
+        JSONObject result = (JSONObject) instance.deserialize(w);
+        assertEquals(result.get("timestamp"), "2014-12-13 00:00:09");
+    }
+
+    @Test
     public void testColumnNameReplacements() throws Exception{
         System.out.println("initialize");
         instance = new JsonSerDe();
