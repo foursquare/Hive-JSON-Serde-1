@@ -1128,9 +1128,8 @@ public class JSONObject {
      */
     public final JSONObject putOnce(String key, Object value) throws JSONException {
         if (key != null && value != null) {
-            if (opt(key) != null) {
-                throw new JSONException("Duplicate key \"" + key + "\"");
-            }
+            // NOTE: we don't throw anymore the duplicate key exception, we just pick the latest value
+            // this is a quick fix we need cause we have json keys that are different in capitalization and are breakin our serde
             put(key, value);
         }
         return this;

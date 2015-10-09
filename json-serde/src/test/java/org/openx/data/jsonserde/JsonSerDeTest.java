@@ -250,6 +250,21 @@ public class JsonSerDeTest {
       assertEquals( ((JSONArray)result.get("three")).get(0),"red");
     }
 
+    @Test
+    public void testDeserializeMapWithCapitalization() throws Exception {
+        System.out.println("testDeserializeMapWithCapitalization");
+        Writable w = new Text("{\"one\":true,\"three\":{\"red\":\"yellow\",\"RED\":\"YELLOW\"},\"two\":19.5,\"four\":\"poop\"}");
+        JsonSerDe serde = new JsonSerDe();
+        Configuration conf = null;
+        Properties tbl = new Properties();
+        tbl.setProperty(Constants.LIST_COLUMNS, "one,two,three,four");
+        tbl.setProperty(Constants.LIST_COLUMN_TYPES, "boolean,float,map<string,string>,string");
+
+        serde.initialize(conf, tbl);
+        JSONObject result = (JSONObject) serde.deserialize(w);
+	assertEquals( ((JSONObject) result.get("three")).get("red"), "YELLOW");
+    }
+
     /**
      * Test of getSerializedClass method, of class JsonSerDe.
      */
