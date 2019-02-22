@@ -45,8 +45,14 @@ public class JavaStringShortObjectInspector
         if(o instanceof String) {
            return ParsePrimitiveUtils.parseShort((String)o); 
         } else {
-          return ((Short) o);
+          return (Short) o;
         }
+    }
+
+    @Override
+    public Object getPrimitiveJavaObject(Object o)
+    {
+        return get(o);
     }
 
     @Override

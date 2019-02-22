@@ -44,13 +44,19 @@ public  class JavaStringByteObjectInspector
         if(o instanceof String) {
            return ParsePrimitiveUtils.parseByte((String)o); 
         } else {
-           return ((Byte) o);
+           return (Byte) o;
         }
     }
 
     @Override
+    public Object getPrimitiveJavaObject(Object o)
+    {
+        return get(o);
+    }
+
+    @Override
     public Object create(byte value) {
-        return (value);
+        return value;
     }
 
     @Override
